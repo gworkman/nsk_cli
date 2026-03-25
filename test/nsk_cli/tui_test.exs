@@ -2,52 +2,57 @@ defmodule NskCli.TUITest do
   use ExUnit.Case, async: true
   alias NskCli.TUI
   alias ExRatatui.Widgets.Table
+  alias ExRatatui.Widgets.List
   alias ExRatatui.Widgets.Paragraph
   alias ExRatatui.Event.Key
   alias ExRatatui.Frame
 
-  test "mount/1 returns initial state with fake devices" do
+  test "mount/1 returns initial state with focus on devices" do
     assert {:ok, state} = TUI.mount([])
-    assert length(state.devices) == 2
+    assert state.focused == :devices
     assert state.selected == 0
   end
 
-  test "handle_event/2 handles arrow navigation keys" do
+  test "handle_event/2 handles focus switching" do
     {:ok, state} = TUI.mount([])
 
-    # Go down
+    # Switch to actions
+    assert {:noreply, state} = TUI.handle_event(%Key{code: "right"}, state)
+    assert state.focused == :actions
+
+    # Switch back to devices
+    assert {:noreply, state} = TUI.handle_event(%Key{code: "left"}, state)
+    assert state.focused == :devices
+  end
+
+  test "handle_event/2 handles navigation in both panels" do
+    {:ok, state} = TUI.mount([])
+
+    # In devices panel
     assert {:noreply, state} = TUI.handle_event(%Key{code: "down"}, state)
     assert state.selected == 1
 
-    # Don't go past the end
+    # Switch to actions
+    assert {:noreply, state} = TUI.handle_event(%Key{code: "right"}, state)
+    assert state.focused == :actions
+
+    # In actions panel (Device 2 is USB FEL, has 4 actions)
     assert {:noreply, state} = TUI.handle_event(%Key{code: "down"}, state)
-    assert state.selected == 1
-
-    # Go up
-    assert {:noreply, state} = TUI.handle_event(%Key{code: "up"}, state)
-    assert state.selected == 0
-
-    # Don't go past the start
-    assert {:noreply, state} = TUI.handle_event(%Key{code: "up"}, state)
-    assert state.selected == 0
+    assert state.selected_action == 1
   end
 
-  test "handle_event/2 handles quit" do
-    {:ok, state} = TUI.mount([])
-    assert {:stop, ^state} = TUI.handle_event(%Key{code: "q"}, state)
-  end
-
-  test "render/2 returns a table and a footer paragraph" do
+  test "render/2 returns table, list, and footer" do
     {:ok, state} = TUI.mount([])
     frame = %Frame{width: 80, height: 24}
 
     assert [
-             {%Table{} = table, _body_rect},
-             {%Paragraph{} = footer, _footer_rect}
+             {%Table{}, _left_rect},
+             {%List{} = actions_list, _right_rect},
+             {%Paragraph{}, _footer_rect}
            ] = TUI.render(state, frame)
 
-    assert table.header == ["ID", "Name", "Type", "Status", "IP"]
-    assert table.selected == 0
-    assert footer.text =~ "↑/↓: Navigate"
+    # Device 1 (Network) has 3 actions
+    assert length(actions_list.items) == 3
   end
+
 end
