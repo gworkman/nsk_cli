@@ -3,10 +3,10 @@ defmodule NskCli.TUI do
   alias ExRatatui.Widgets.Block
   alias ExRatatui.Widgets.Table
   alias ExRatatui.Widgets.Paragraph
-  alias ExRatatui.Widgets.Popup
+  alias ExRatatui.Widgets.Clear
   alias ExRatatui.Widgets.List
   alias ExRatatui.Widgets.Gauge
-  alias ExRatatui.Widgets.WidgetList
+  alias ExRatatui.Widgets.Scrollbar
   alias ExRatatui.Layout
   alias ExRatatui.Layout.Rect
   alias ExRatatui.Style
@@ -43,27 +43,15 @@ defmodule NskCli.TUI do
 
     # Popup Overlay
     if state.active_action do
-      popup_content = render_action_popup(state.active_action)
+      # Calculate centered popup area
+      popup_width = round(frame.width * 0.8)
+      popup_height = round(frame.height * 0.8)
+      popup_x = max(0, div(frame.width - popup_width, 2))
+      popup_y = max(0, div(frame.height - popup_height, 2))
+      popup_area = %Rect{x: popup_x, y: popup_y, width: popup_width, height: popup_height}
 
-      popup = %Popup{
-        content: popup_content,
-        percent_width: 60,
-        percent_height: 60,
-        block: %Block{
-          title: " #{state.active_action.title} ",
-          borders: [:all],
-          border_type: :rounded,
-          border_style: %Style{fg: :light_blue, modifiers: [:bold]}
-        }
-      }
-
-      # Render popup on top of main UI?
-      # ExRatatui.App.render expects a list of {widget, rect} tuples.
-      # The Popup widget in ExRatatui handles clearing the background, 
-      # but we need to return it in the list *after* the main UI widgets so it draws on top.
-      # However, ExRatatui's draw order is sequential.
-
-      main_ui ++ [{popup, area}]
+      popup_widgets = render_active_action_overlay(state.active_action, popup_area)
+      main_ui ++ popup_widgets
     else
       main_ui
     end
@@ -160,37 +148,67 @@ defmodule NskCli.TUI do
     ]
   end
 
-  defp render_action_popup(action_state) do
-    list = %List{
-      items: Enum.reverse(action_state.logs),
-      block: %Block{
-        title: " Logs (Press 'x' to close) ",
-        borders: [:all],
-        border_style: %Style{fg: :gray}
-      }
+  defp render_active_action_overlay(action, area) do
+    block = %Block{
+      title: " #{action.title} (↑/↓: Scroll | x: Close) ",
+      borders: [:all],
+      border_type: :rounded,
+      border_style: %Style{fg: :light_blue, modifiers: [:bold]}
     }
 
-    if action_state.progress do
-      gauge = %Gauge{
-        ratio: action_state.progress / 100.0,
-        label: "#{action_state.progress}%",
-        gauge_style: %Style{fg: :light_blue, modifiers: [:bold]},
-        block: %Block{
-          title: " Progress ",
-          borders: [:all],
-          border_style: %Style{fg: :light_blue}
-        }
-      }
+    # Manually calculate inner area (assuming borders: [:all] takes 1 cell on each side)
+    inner_area = %Rect{
+      x: area.x + 1,
+      y: area.y + 1,
+      width: max(0, area.width - 2),
+      height: max(0, area.height - 2)
+    }
+    
+    # Split inner area vertically: Progress (optional) | Logs
+    {progress_area, content_area} =
+      if action.progress do
+        [p, c] = Layout.split(inner_area, :vertical, [{:length, 3}, {:min, 0}])
+        {p, c}
+      else
+        {nil, inner_area}
+      end
 
-      %WidgetList{
-        items: [
-          {gauge, 3},
-          {list, 10}
-        ]
+    # Split content area horizontally: Logs | Scrollbar
+    [logs_area, scroll_area] = Layout.split(content_area, :horizontal, [{:min, 0}, {:length, 1}])
+
+    # Widgets
+    clear = %Clear{}
+    
+    gauge = if action.progress do
+      %Gauge{
+        ratio: action.progress / 100.0,
+        label: "#{action.progress}%",
+        gauge_style: %Style{fg: :light_blue, modifiers: [:bold]},
+        block: %Block{borders: [:bottom], border_style: %Style{fg: :gray}}
       }
-    else
-      list
     end
+
+    list = %List{
+      items: action.logs,
+      selected: action.selected_log,
+      highlight_style: %Style{bg: :gray, fg: :white},
+      highlight_symbol: " "
+    }
+
+    scrollbar = %Scrollbar{
+      orientation: :vertical_right,
+      content_length: length(action.logs),
+      position: action.selected_log,
+      viewport_content_length: logs_area.height
+    }
+
+    widgets = [
+      {clear, area},
+      {block, area}
+    ]
+
+    widgets = if gauge, do: widgets ++ [{gauge, progress_area}], else: widgets
+    widgets ++ [{list, logs_area}, {scrollbar, scroll_area}]
   end
 
   defp focus_styles(focused?) do
@@ -216,6 +234,16 @@ defmodule NskCli.TUI do
   end
 
   # Ignore other keys if action is active (modal behavior)
+  def handle_event(%ExRatatui.Event.Key{code: "up"}, %{active_action: action} = state) do
+    new_selected = min(action.selected_log + 1, length(action.logs) - 1)
+    {:noreply, put_in(state.active_action.selected_log, new_selected)}
+  end
+
+  def handle_event(%ExRatatui.Event.Key{code: "down"}, %{active_action: action} = state) do
+    new_selected = max(action.selected_log - 1, 0)
+    {:noreply, put_in(state.active_action.selected_log, new_selected)}
+  end
+
   def handle_event(_event, %{active_action: %{}} = state) do
     {:noreply, state}
   end
@@ -262,7 +290,7 @@ defmodule NskCli.TUI do
   @impl true
   def handle_info({:action_started, task, title}, state) do
     {:noreply,
-     %{state | active_action: %{task: task, title: title, logs: ["Starting..."], progress: nil}}}
+     %{state | active_action: %{task: task, title: title, logs: ["Starting..."], progress: nil, selected_log: 0}}}
   end
 
   @impl true
@@ -277,9 +305,17 @@ defmodule NskCli.TUI do
   @impl true
   def handle_info({:action_log, msg}, state) do
     if state.active_action do
-      new_logs = [msg | state.active_action.logs]
-      # Limit logs?
-      {:noreply, put_in(state.active_action.logs, new_logs)}
+      # Prepend to logs (index 0 is newest)
+      new_logs = Enum.take([msg | state.active_action.logs], 1000)
+      
+      # If user is at the top (index 0), they probably want to see new logs, 
+      # so keep selected_log at 0.
+      # If they scrolled up (index > 0), we increment to keep them at same log.
+      new_selected = if state.active_action.selected_log > 0, do: state.active_action.selected_log + 1, else: 0
+      new_selected = min(new_selected, length(new_logs) - 1)
+      
+      active_action = %{state.active_action | logs: new_logs, selected_log: new_selected}
+      {:noreply, %{state | active_action: active_action}}
     else
       {:noreply, state}
     end
@@ -294,8 +330,9 @@ defmodule NskCli.TUI do
       end
 
     if state.active_action do
-      new_logs = [msg | state.active_action.logs]
-      {:noreply, put_in(state.active_action.logs, new_logs)}
+      new_logs = Enum.take([msg | state.active_action.logs], 1000)
+      active_action = %{state.active_action | logs: new_logs}
+      {:noreply, %{state | active_action: active_action}}
     else
       # If action was cancelled or something, just update status
       {:noreply, %{state | status_message: msg}}

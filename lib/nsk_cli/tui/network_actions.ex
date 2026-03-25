@@ -40,11 +40,23 @@ defmodule NskCli.TUI.NetworkActions do
   def handle_event(%ExRatatui.Event.Key{code: "enter"}, state) do
     selected_device = Enum.at(state.devices, state.selected)
     actions = Device.actions(selected_device)
-    _action = Enum.at(actions, state.selected_action)
+    action = Enum.at(actions, state.selected_action)
 
-    # For now, just log the action
-    # IO.puts("Running #{action} on #{selected_device.name}")
-    {:noreply, state}
+    case action do
+      "Follow logs" ->
+        parent = self()
+        {:ok, pid} = Task.start(fn ->
+          log_fun = fn msg -> send(parent, {:action_log, msg}) end
+          result = NskCli.Actions.Network.follow_logs(selected_device.id, log_fun)
+          send(parent, {:action_result, result})
+        end)
+        
+        send(parent, {:action_started, pid, "Follow logs"})
+        {:noreply, state}
+        
+      _ ->
+        {:noreply, state}
+    end
   end
 
   def handle_event(%ExRatatui.Event.Key{code: "down"}, state) do
