@@ -7,13 +7,11 @@ defmodule NskCli.Discovery do
   """
   def discover do
     # Simulate scanning delay
-    Process.sleep(500)
-
     network_devices = scan_network()
     usb_devices = scan_usb()
     mass_storage_devices = scan_mass_storage()
 
-    network_devices ++ usb_devices ++ mass_storage_devices ++ fake_devices()
+    network_devices ++ usb_devices ++ mass_storage_devices
   end
 
   defp fake_devices do
@@ -43,7 +41,7 @@ defmodule NskCli.Discovery do
   end
 
   defp scan_network do
-    NervesDiscovery.discover(timeout: 1_000)
+    NervesDiscovery.discover()
     |> Enum.map(fn d ->
       ip =
         case d.addresses do

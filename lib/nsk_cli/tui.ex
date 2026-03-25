@@ -21,15 +21,17 @@ defmodule NskCli.TUI do
   @impl true
   def mount(_opts) do
     Task.async(fn -> Discovery.discover() end)
-    {:ok, %{
-      devices: [], 
-      selected: 0, 
-      selected_action: 0, 
-      focused: :devices, 
-      scanning?: true, 
-      status_message: nil,
-      active_action: nil
-    }}
+
+    {:ok,
+     %{
+       devices: [],
+       selected: 0,
+       selected_action: 0,
+       focused: :devices,
+       scanning?: true,
+       status_message: nil,
+       active_action: nil
+     }}
   end
 
   @impl true
@@ -42,11 +44,11 @@ defmodule NskCli.TUI do
     # Popup Overlay
     if state.active_action do
       popup_content = render_action_popup(state.active_action)
-      
+
       popup = %Popup{
         content: popup_content,
         percent_width: 60,
-        percent_height: 50,
+        percent_height: 60,
         block: %Block{
           title: " #{state.active_action.title} ",
           borders: [:all],
@@ -54,13 +56,13 @@ defmodule NskCli.TUI do
           border_style: %Style{fg: :light_blue, modifiers: [:bold]}
         }
       }
-      
+
       # Render popup on top of main UI?
       # ExRatatui.App.render expects a list of {widget, rect} tuples.
       # The Popup widget in ExRatatui handles clearing the background, 
       # but we need to return it in the list *after* the main UI widgets so it draws on top.
       # However, ExRatatui's draw order is sequential.
-      
+
       main_ui ++ [{popup, area}]
     else
       main_ui
@@ -69,11 +71,13 @@ defmodule NskCli.TUI do
 
   defp render_main_ui(state, area) do
     [body, footer_area] = Layout.split(area, :vertical, [{:min, 0}, {:length, 1}])
-    [left_area, right_area] = Layout.split(body, :horizontal, [{:percentage, 33}, {:percentage, 67}])
+
+    [left_area, right_area] =
+      Layout.split(body, :horizontal, [{:percentage, 50}, {:percentage, 50}])
 
     {devices_border_style, devices_highlight_style} = focus_styles(state.focused == :devices)
-    
-    devices_widget = 
+
+    devices_widget =
       if state.devices == [] and state.scanning? do
         %Paragraph{
           text: "\n Scanning...",
@@ -92,7 +96,7 @@ defmodule NskCli.TUI do
         %Table{
           header: header,
           rows: rows,
-          widths: [{:min, 8}, {:percentage, 60}, {:length, 13}],
+          widths: [{:percentage, 30}, {:percentage, 40}, {:percentage, 30}],
           selected: state.selected,
           highlight_symbol: ">> ",
           highlight_style: devices_highlight_style,
@@ -106,29 +110,44 @@ defmodule NskCli.TUI do
       end
 
     selected_device = Enum.at(state.devices, state.selected)
-    
+
     actions_widget =
       case selected_device do
-        %Device{type: "Network"} -> NetworkActions.render(state, right_area, state.focused == :actions)
-        %Device{type: "USB FEL"} -> USBActions.render(state, right_area, state.focused == :actions)
-        %Device{type: "Mass Storage"} -> MassStorageActions.render(state, right_area, state.focused == :actions)
+        %Device{type: "Network"} ->
+          NetworkActions.render(state, right_area, state.focused == :actions)
+
+        %Device{type: "USB FEL"} ->
+          USBActions.render(state, right_area, state.focused == :actions)
+
+        %Device{type: "Mass Storage"} ->
+          MassStorageActions.render(state, right_area, state.focused == :actions)
+
         nil ->
-          {%Paragraph{
-            text: "\n Select a device to see actions",
-            alignment: :center,
-            block: %Block{
-              title: " Actions ",
-              borders: [:all],
-              border_style: if(state.focused == :actions, do: %Style{fg: :light_blue, modifiers: [:bold]}, else: %Style{fg: :gray}),
-              border_type: if(state.focused == :actions, do: :thick, else: :plain)
-            }
-          }, right_area} # Return tuple to match {widget, rect}
+          {
+            %Paragraph{
+              text: "\n Select a device to see actions",
+              alignment: :center,
+              block: %Block{
+                title: " Actions ",
+                borders: [:all],
+                border_style:
+                  if(state.focused == :actions,
+                    do: %Style{fg: :light_blue, modifiers: [:bold]},
+                    else: %Style{fg: :gray}
+                  ),
+                border_type: if(state.focused == :actions, do: :thick, else: :plain)
+              }
+            },
+            # Return tuple to match {widget, rect}
+            right_area
+          }
       end
-      
+
     # Unpack actions_widget tuple if it was returned as such (NetworkActions/USBActions return {widget, rect})
     {actions_widget_content, _} = actions_widget
 
     status_text = if state.status_message, do: " | Status: #{state.status_message}", else: ""
+
     footer = %Paragraph{
       text: " q: Quit | ↑/↓: Navigate | ←/→: Switch Panel | enter: Run Action#{status_text} ",
       style: %Style{fg: :gray}
@@ -140,7 +159,7 @@ defmodule NskCli.TUI do
       {footer, footer_area}
     ]
   end
-  
+
   defp render_action_popup(action_state) do
     list = %List{
       items: Enum.reverse(action_state.logs),
@@ -176,7 +195,8 @@ defmodule NskCli.TUI do
 
   defp focus_styles(focused?) do
     if focused? do
-      {%Style{fg: :light_blue, modifiers: [:bold]}, %Style{fg: :black, bg: :light_blue, modifiers: [:bold]}}
+      {%Style{fg: :light_blue, modifiers: [:bold]},
+       %Style{fg: :black, bg: :light_blue, modifiers: [:bold]}}
     else
       {%Style{fg: :gray}, %Style{modifiers: [:reversed]}}
     end
@@ -188,13 +208,13 @@ defmodule NskCli.TUI do
   def handle_event(%ExRatatui.Event.Key{code: "q"}, state) do
     {:stop, state}
   end
-  
+
   # Intercept 'x' to cancel active action
   def handle_event(%ExRatatui.Event.Key{code: "x"}, %{active_action: %{task: task_pid}} = state) do
     Process.exit(task_pid, :kill)
     {:noreply, %{state | active_action: nil, status_message: "Action cancelled"}}
   end
-  
+
   # Ignore other keys if action is active (modal behavior)
   def handle_event(_event, %{active_action: %{}} = state) do
     {:noreply, state}
@@ -236,12 +256,13 @@ defmodule NskCli.TUI do
       _ -> {:noreply, state}
     end
   end
-  
+
   # Info Handling
 
   @impl true
   def handle_info({:action_started, task, title}, state) do
-    {:noreply, %{state | active_action: %{task: task, title: title, logs: ["Starting..."], progress: nil}}}
+    {:noreply,
+     %{state | active_action: %{task: task, title: title, logs: ["Starting..."], progress: nil}}}
   end
 
   @impl true
@@ -252,7 +273,7 @@ defmodule NskCli.TUI do
       {:noreply, state}
     end
   end
-  
+
   @impl true
   def handle_info({:action_log, msg}, state) do
     if state.active_action do
@@ -266,17 +287,18 @@ defmodule NskCli.TUI do
 
   @impl true
   def handle_info({:action_result, result}, state) do
-    msg = case result do
-      {:ok, m} -> "Success: #{m}"
-      {:error, r} -> "Error: #{inspect(r)}"
-    end
-    
+    msg =
+      case result do
+        {:ok, m} -> "Success: #{m}"
+        {:error, r} -> "Error: #{inspect(r)}"
+      end
+
     if state.active_action do
-       new_logs = [msg | state.active_action.logs]
-       {:noreply, put_in(state.active_action.logs, new_logs)}
+      new_logs = [msg | state.active_action.logs]
+      {:noreply, put_in(state.active_action.logs, new_logs)}
     else
-       # If action was cancelled or something, just update status
-       {:noreply, %{state | status_message: msg}}
+      # If action was cancelled or something, just update status
+      {:noreply, %{state | status_message: msg}}
     end
   end
 
@@ -285,7 +307,7 @@ defmodule NskCli.TUI do
     Task.async(fn -> Discovery.discover() end)
     {:noreply, %{state | scanning?: true}}
   end
-  
+
   @impl true
   def handle_info(:clear_status, state) do
     {:noreply, Map.put(state, :status_message, nil)}
