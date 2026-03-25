@@ -49,7 +49,7 @@ defmodule NskCli.TUI.MassStorageActions do
         {:ok, pid} = Task.start(fn ->
           log_fun = fn msg -> send(parent, {:action_log, msg}) end
 
-          result = NskCli.Actions.MassStorage.burn(selected_device.id, log_fun)
+          result = NskCli.Actions.MassStorage.burn(selected_device.id, log_fun, parent)
 
           send(parent, {:action_result, result})
         end)

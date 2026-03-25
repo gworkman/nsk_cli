@@ -5,6 +5,8 @@ defmodule NskCli.TUI do
   alias ExRatatui.Widgets.Paragraph
   alias ExRatatui.Widgets.Popup
   alias ExRatatui.Widgets.List
+  alias ExRatatui.Widgets.Gauge
+  alias ExRatatui.Widgets.WidgetList
   alias ExRatatui.Layout
   alias ExRatatui.Layout.Rect
   alias ExRatatui.Style
@@ -140,14 +142,36 @@ defmodule NskCli.TUI do
   end
   
   defp render_action_popup(action_state) do
-    # Show logs in a list
-    %List{
-      items: Enum.reverse(action_state.logs), # Newest at bottom visually, so reverse if we prepend
+    list = %List{
+      items: Enum.reverse(action_state.logs),
       block: %Block{
-        title: "Logs (Press 'x' to close) ",
-        style: %Style{modifiers: [:bold]}
+        title: " Logs (Press 'x' to close) ",
+        borders: [:all],
+        border_style: %Style{fg: :gray}
       }
     }
+
+    if action_state.progress do
+      gauge = %Gauge{
+        ratio: action_state.progress / 100.0,
+        label: "#{action_state.progress}%",
+        gauge_style: %Style{fg: :light_blue, modifiers: [:bold]},
+        block: %Block{
+          title: " Progress ",
+          borders: [:all],
+          border_style: %Style{fg: :light_blue}
+        }
+      }
+
+      %WidgetList{
+        widgets: [
+          {gauge, %{height: 3}},
+          {list, %{height: :fill}}
+        ]
+      }
+    else
+      list
+    end
   end
 
   defp focus_styles(focused?) do
@@ -217,7 +241,16 @@ defmodule NskCli.TUI do
 
   @impl true
   def handle_info({:action_started, task, title}, state) do
-    {:noreply, %{state | active_action: %{task: task, title: title, logs: ["Starting..."]}}}
+    {:noreply, %{state | active_action: %{task: task, title: title, logs: ["Starting..."], progress: nil}}}
+  end
+
+  @impl true
+  def handle_info({:action_progress, p}, state) do
+    if state.active_action do
+      {:noreply, put_in(state.active_action.progress, p)}
+    else
+      {:noreply, state}
+    end
   end
   
   @impl true

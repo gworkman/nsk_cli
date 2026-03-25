@@ -5,7 +5,7 @@ defmodule NskCli.Actions.MassStorage do
 
   defp cache_dir, do: Path.expand("~/.nerves/dl")
 
-  def burn(device_id, log_fun \\ fn _ -> :ok end) do
+  def burn(device_id, log_fun \\ fn _ -> :ok end, parent \\ self()) do
     fw_path = Path.join(cache_dir(), @filename)
 
     if File.exists?(fw_path) do
@@ -13,10 +13,9 @@ defmodule NskCli.Actions.MassStorage do
       log_fun.("Burning to #{device_id}...")
 
       case Fwup.apply(device_id, "complete", fw_path) do
-        {:ok, _pid} ->
-          wait_for_fwup(log_fun)
-
-        {:error, reason} ->
+        {:ok, _pid} -> 
+          wait_for_fwup(log_fun, parent)
+        {:error, reason} -> 
           log_fun.("Failed to start burn: #{inspect(reason)}")
           {:error, reason}
       end
@@ -26,11 +25,13 @@ defmodule NskCli.Actions.MassStorage do
     end
   end
 
-  defp wait_for_fwup(log_fun) do
+  defp wait_for_fwup(log_fun, parent) do
     receive do
       {:fwup, {:progress, p}} ->
+        send(parent, {:action_progress, p})
         log_fun.("Progress: #{p}%")
-        wait_for_fwup(log_fun)
+        wait_for_fwup(log_fun, parent)
+
 
       {:fwup, {:ok, _code, msg}} ->
         log_fun.("Burn successful: #{msg}")
@@ -42,7 +43,7 @@ defmodule NskCli.Actions.MassStorage do
 
       {:fwup, {:warning, _code, msg}} ->
         log_fun.("Warning: #{msg}")
-        wait_for_fwup(log_fun)
+        wait_for_fwup(log_fun, parent)
     after
       60_000 ->
         {:error, :timeout}
