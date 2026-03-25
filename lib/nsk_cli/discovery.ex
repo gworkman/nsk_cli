@@ -11,28 +11,28 @@ defmodule NskCli.Discovery do
     usb_devices = scan_usb()
     mass_storage_devices = scan_mass_storage()
 
-    network_devices ++ usb_devices ++ mass_storage_devices
+    network_devices ++ usb_devices ++ mass_storage_devices ++ fake_devices()
   end
 
   defp fake_devices do
     [
       %Device{
-        id: "fake-net-1",
-        name: "Kiosk Demo (rpi4)",
+        id: "nerves.local",
+        name: "FAKE RPi 4",
         type: "Network",
         status: "Online",
         ip: "192.168.7.48"
       },
       %Device{
         id: "93407200:7c004814:0102a04c:5c5b1cd8",
-        name: "R528",
+        name: "FAKE T113-S4",
         type: "USB FEL",
         status: "Connected",
         ip: nil
       },
       %Device{
         id: "/dev/sdx",
-        name: "/dev/sdx",
+        name: "FAKE /dev/sdx",
         type: "Mass Storage",
         status: "12345 bytes",
         ip: nil

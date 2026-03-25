@@ -2,7 +2,6 @@ defmodule NskCli.TUI.MassStorageActions do
   alias ExRatatui.Widgets.Block
   alias ExRatatui.Widgets.List
   alias NskCli.Device
-  alias NskCli.Actions.MassStorage
 
   def render(state, rect, focused?) do
     selected_device = Enum.at(state.devices, state.selected)

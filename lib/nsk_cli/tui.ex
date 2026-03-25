@@ -183,9 +183,9 @@ defmodule NskCli.TUI do
       }
 
       %WidgetList{
-        widgets: [
-          {gauge, %{height: 3}},
-          {list, %{height: :fill}}
+        items: [
+          {gauge, 3},
+          {list, 10}
         ]
       }
     else
