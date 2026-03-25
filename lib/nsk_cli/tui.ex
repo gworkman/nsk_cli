@@ -234,12 +234,12 @@ defmodule NskCli.TUI do
   end
 
   # Ignore other keys if action is active (modal behavior)
-  def handle_event(%ExRatatui.Event.Key{code: "up"}, %{active_action: action} = state) do
+  def handle_event(%ExRatatui.Event.Key{code: "up"}, %{active_action: %{} = action} = state) do
     new_selected = min(action.selected_log + 1, length(action.logs) - 1)
     {:noreply, put_in(state.active_action.selected_log, new_selected)}
   end
 
-  def handle_event(%ExRatatui.Event.Key{code: "down"}, %{active_action: action} = state) do
+  def handle_event(%ExRatatui.Event.Key{code: "down"}, %{active_action: %{} = action} = state) do
     new_selected = max(action.selected_log - 1, 0)
     {:noreply, put_in(state.active_action.selected_log, new_selected)}
   end
