@@ -2,6 +2,7 @@ defmodule NskCli.TUI.USBActions do
   alias ExRatatui.Widgets.Block
   alias ExRatatui.Widgets.List
   alias NskCli.Device
+  alias NskCli.Actions.USB
 
   def render(state, rect, focused?) do
     selected_device = Enum.at(state.devices, state.selected)
@@ -40,10 +41,24 @@ defmodule NskCli.TUI.USBActions do
   def handle_event(%ExRatatui.Event.Key{code: "enter"}, state) do
     selected_device = Enum.at(state.devices, state.selected)
     actions = Device.actions(selected_device)
-    _action = Enum.at(actions, state.selected_action)
+    action = Enum.at(actions, state.selected_action)
 
-    # For now, just log the action
-    {:noreply, state}
+    case action do
+      "Load FEL loaders" ->
+        parent = self()
+        {:ok, pid} = Task.start(fn ->
+          log_fun = fn msg -> send(parent, {:action_log, msg}) end
+          result = USB.load_fel_loader(selected_device.id, log_fun)
+          send(parent, {:action_result, result})
+        end)
+        
+        send(parent, {:action_started, pid, "Load FEL Loader"})
+        
+        {:noreply, state}
+        
+      _ ->
+        {:noreply, state}
+    end
   end
 
   def handle_event(%ExRatatui.Event.Key{code: "down"}, state) do

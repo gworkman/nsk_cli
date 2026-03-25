@@ -66,8 +66,52 @@ defmodule NskCli.TUITest do
     assert [
              {%Paragraph{text: "\n Scanning..."}, _left_rect},
              {%Paragraph{text: "\n Select a device to see actions"}, _right_rect},
-             {%Paragraph{}, _footer_rect}
+             {%Paragraph{} = footer, _footer_rect}
            ] = TUI.render(state, frame)
+    
+    assert footer.text =~ "q: Quit"
+  end
+
+  test "handle_info/2 updates status message" do
+    {:ok, state} = TUI.mount([])
+    
+    assert {:noreply, new_state} = TUI.handle_info({:action_result, {:ok, "Done"}}, state)
+    assert new_state.status_message == "Success: Done"
+    
+    assert {:noreply, cleared_state} = TUI.handle_info(:clear_status, new_state)
+    assert cleared_state.status_message == nil
+  end
+
+  test "active action popup workflow" do
+    {:ok, state} = TUI.mount([])
+    
+    # 1. Start Action
+    task = Task.async(fn -> :ok end)
+    {:noreply, state} = TUI.handle_info({:action_started, task.pid, "Test Action"}, state)
+    
+    assert state.active_action.title == "Test Action"
+    assert state.active_action.logs == ["Starting..."]
+    
+    # 2. Render Popup
+    frame = %Frame{width: 80, height: 24}
+    widgets = TUI.render(state, frame)
+    # Should have main UI + Popup
+    assert length(widgets) > 3 
+    {last_widget, _rect} = Elixir.List.last(widgets)
+    assert last_widget.__struct__ == ExRatatui.Widgets.Popup
+    
+    # 3. Receive Logs
+    {:noreply, state} = TUI.handle_info({:action_log, "Step 1"}, state)
+    assert state.active_action.logs == ["Step 1", "Starting..."]
+    
+    # 4. Finish Action
+    {:noreply, state} = TUI.handle_info({:action_result, {:ok, "Finished"}}, state)
+    assert state.active_action.logs == ["Success: Finished", "Step 1", "Starting..."]
+    
+    # 5. Cancel/Close with 'x'
+    {:noreply, state} = TUI.handle_event(%Key{code: "x"}, state)
+    assert state.active_action == nil
+    assert state.status_message == "Action cancelled"
   end
 
   test "render/2 returns table, list, and footer after discovery" do

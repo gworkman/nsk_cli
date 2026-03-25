@@ -25,7 +25,8 @@ defmodule NskCli.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:sunxi, "~> 0.1"},
+      {:req, "~> 0.5"},
+      {:sunxi, "~> 0.1.3"},
       {:nerves_discovery, "~> 0.1"},
       {:ex_ratatui, "~> 0.5"},
       {:bandit, "~> 1.0", only: [:dev]},
