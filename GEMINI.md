@@ -14,23 +14,31 @@ Network devices:
 - Factory reset
 - Follow logs
 - SSH into IEx shell
+- Set up WiFi credentials
 
-USB/FEL devices:
+FEL devices:
 
 - Load latest usb_fel_loaders firmware from GitHub or cache (reboots the device
   in USB mass storage mode)
-- fwup burn .fw file to USB mass storage
-- Follow logs (via USB serial device)
-- Reboot into FEL mode (via USB serial device)
+
+USB Serial devices
+
+- Follow logs from serial device
+- Reboot into FEL mode using DTR and RTS signals
+
+Mass storage devices:
+
+- fwup burn .fw files
+- Download and cache latest release files from a specified project
 
 ## Directives:
 
 - use the ex_ratatui package to build the CLI
 - use `nerves_discovery` and `sunxi` packages to detect devices on the network
-  and via USB FEL mode, respectively
+  and via USB FEL mode, respectively. Also use `Fwup` elixir library to detect
+  mass storage devices, and to flash `.fw` files. Use `circuits_uart` to
+  interact with serial devices
 - ALWAYS read the documentation on a module or function before using it.
   Documentation must be fetched with Tidewave `get_docs` tool.
-- Create a `run.exs` file which starts a ExRatatui.App GenServer and waits for
-  it to shutdown
 - Always test the application to ensure that the functionality does as it
-  expects
+  expects. Tests should verify the output of the buffer

@@ -11,8 +11,9 @@ defmodule NskCli.Discovery do
 
     network_devices = scan_network()
     usb_devices = scan_usb()
+    mass_storage_devices = scan_mass_storage()
 
-    network_devices ++ usb_devices
+    network_devices ++ usb_devices ++ mass_storage_devices ++ fake_devices()
   end
 
   defp fake_devices do
@@ -29,6 +30,13 @@ defmodule NskCli.Discovery do
         name: "R528",
         type: "USB FEL",
         status: "Connected",
+        ip: nil
+      },
+      %Device{
+        id: "/dev/sdx",
+        name: "/dev/sdx",
+        type: "Mass Storage",
+        status: "12345 bytes",
         ip: nil
       }
     ]
@@ -88,5 +96,19 @@ defmodule NskCli.Discovery do
       _ ->
         []
     end
+  end
+
+  defp scan_mass_storage do
+    Fwup.get_devices()
+    |> Enum.reject(&(&1 == [""]))
+    |> Enum.map(fn [device, size] ->
+      %Device{
+        id: device,
+        name: device,
+        type: "Mass Storage",
+        status: "#{size} bytes",
+        ip: nil
+      }
+    end)
   end
 end

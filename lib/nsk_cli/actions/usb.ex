@@ -20,16 +20,16 @@ defmodule NskCli.Actions.USB do
   defp get_latest_version(log_fun) do
     log_fun.("Fetching latest release info from GitHub...")
     url = "https://api.github.com/repos/#{@github_repo}/releases/latest"
-    
+
     case Req.get(url) do
       {:ok, %{status: 200, body: body}} ->
         version = body["tag_name"]
         log_fun.("Found version: #{version}")
         {:ok, version}
-      
+
       {:ok, %{status: status}} ->
         {:error, "GitHub API returned status #{status}"}
-        
+
       {:error, reason} ->
         {:error, "Failed to fetch release info: #{inspect(reason)}"}
     end
@@ -56,15 +56,15 @@ defmodule NskCli.Actions.USB do
 
   defp download_file(version, path) do
     url = "https://github.com/#{@github_repo}/releases/download/#{version}/#{@filename}"
-    
+
     case Req.get(url) do
       {:ok, %{status: 200, body: body}} ->
         File.write!(path, body)
         {:ok, path}
-        
+
       {:ok, %{status: status}} ->
         {:error, "Download failed with status #{status}"}
-        
+
       {:error, reason} ->
         {:error, "Failed to download file: #{inspect(reason)}"}
     end

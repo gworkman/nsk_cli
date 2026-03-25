@@ -25,6 +25,7 @@ defmodule NskCli.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:circuits_uart, "~> 1.0"},
       {:fwup, "~> 1.0"},
       {:req, "~> 0.5"},
       {:sunxi, "~> 0.1.3"},

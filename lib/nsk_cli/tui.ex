@@ -12,6 +12,7 @@ defmodule NskCli.TUI do
   alias NskCli.Discovery
   alias NskCli.TUI.NetworkActions
   alias NskCli.TUI.USBActions
+  alias NskCli.TUI.MassStorageActions
 
   @refresh_interval 2_000
 
@@ -89,7 +90,7 @@ defmodule NskCli.TUI do
         %Table{
           header: header,
           rows: rows,
-          widths: [{:length, 4}, {:percentage, 60}, {:length, 10}],
+          widths: [{:min, 8}, {:percentage, 60}, {:length, 13}],
           selected: state.selected,
           highlight_symbol: ">> ",
           highlight_style: devices_highlight_style,
@@ -108,6 +109,7 @@ defmodule NskCli.TUI do
       case selected_device do
         %Device{type: "Network"} -> NetworkActions.render(state, right_area, state.focused == :actions)
         %Device{type: "USB FEL"} -> USBActions.render(state, right_area, state.focused == :actions)
+        %Device{type: "Mass Storage"} -> MassStorageActions.render(state, right_area, state.focused == :actions)
         nil ->
           {%Paragraph{
             text: "\n Select a device to see actions",
@@ -142,8 +144,8 @@ defmodule NskCli.TUI do
     %List{
       items: Enum.reverse(action_state.logs), # Newest at bottom visually, so reverse if we prepend
       block: %Block{
-        title: " Logs (Press 'x' to cancel) ",
-        borders: [:top],
+        title: "Logs (Press 'x' to close) ",
+        style: %Style{modifiers: [:bold]}
       }
     }
   end
@@ -206,6 +208,7 @@ defmodule NskCli.TUI do
     case selected_device do
       %Device{type: "Network"} -> NetworkActions.handle_event(event, state)
       %Device{type: "USB FEL"} -> USBActions.handle_event(event, state)
+      %Device{type: "Mass Storage"} -> MassStorageActions.handle_event(event, state)
       _ -> {:noreply, state}
     end
   end
@@ -230,11 +233,6 @@ defmodule NskCli.TUI do
 
   @impl true
   def handle_info({:action_result, result}, state) do
-    # When action finishes, we might want to close the popup or show the final result
-    # User said "It should print some text... then also print some messages as it applies"
-    # "To close the dialog, the user can press 'x'" - implies we might stay open?
-    
-    # Let's append the result to logs and keep it open until 'x'
     msg = case result do
       {:ok, m} -> "Success: #{m}"
       {:error, r} -> "Error: #{inspect(r)}"

@@ -8,9 +8,14 @@ defmodule NskCli.Device do
   def actions(%__MODULE__{type: "USB FEL"}) do
     [
       "Load FEL loaders",
-      "fwup burn .fw",
       "Follow logs (USB)",
       "Reboot into FEL"
+    ]
+  end
+
+  def actions(%__MODULE__{type: "Mass Storage"}) do
+    [
+      "Burn latest .fw file"
     ]
   end
 
