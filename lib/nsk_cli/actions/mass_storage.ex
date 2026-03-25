@@ -13,9 +13,10 @@ defmodule NskCli.Actions.MassStorage do
       log_fun.("Burning to #{device_id}...")
 
       case Fwup.apply(device_id, "complete", fw_path) do
-        {:ok, _pid} -> 
+        {:ok, _pid} ->
           wait_for_fwup(log_fun, parent)
-        {:error, reason} -> 
+
+        {:error, reason} ->
           log_fun.("Failed to start burn: #{inspect(reason)}")
           {:error, reason}
       end
@@ -29,9 +30,8 @@ defmodule NskCli.Actions.MassStorage do
     receive do
       {:fwup, {:progress, p}} ->
         send(parent, {:action_progress, p})
-        log_fun.("Progress: #{p}%")
+        # log_fun.("Progress: #{p}%")
         wait_for_fwup(log_fun, parent)
-
 
       {:fwup, {:ok, _code, msg}} ->
         log_fun.("Burn successful: #{msg}")
