@@ -11,9 +11,8 @@ defmodule NskCli.Discovery do
 
     network_devices = scan_network()
     usb_devices = scan_usb()
-    fake_devices = fake_devices()
 
-    network_devices ++ usb_devices ++ fake_devices
+    network_devices ++ usb_devices
   end
 
   defp fake_devices do
@@ -72,7 +71,7 @@ defmodule NskCli.Discovery do
 
   defp scan_usb do
     case Sunxi.FEL.list_devices() do
-      {:ok, devices} ->
+      devices when is_list(devices) ->
         Enum.map(devices, fn d ->
           # Use sid if available, otherwise fallback to bus/device
           id = Map.get(d, :sid) || "usb-#{d.bus}-#{d.device}"
