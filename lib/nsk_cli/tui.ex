@@ -8,10 +8,14 @@ defmodule NskCli.TUI do
   alias ExRatatui.Layout.Rect
   alias ExRatatui.Style
   alias NskCli.Device
+  alias NskCli.Discovery
+
+  @refresh_interval 5_000
 
   @impl true
   def mount(_opts) do
-    {:ok, %{devices: Device.fake_devices(), selected: 0, selected_action: 0, focused: :devices}}
+    Task.async(fn -> Discovery.discover() end)
+    {:ok, %{devices: [], selected: 0, selected_action: 0, focused: :devices, scanning?: true}}
   end
 
   @impl true
@@ -30,58 +34,95 @@ defmodule NskCli.TUI do
       {:percentage, 67}
     ])
 
-    header = ["ID", "Name", "Type"]
-    rows = Enum.map(state.devices, fn d ->
-      [d.id, d.name, d.type]
-    end)
-
     # Styling based on focus
-    {devices_border_style, devices_highlight_style} = if state.focused == :devices do
-      {%Style{fg: :light_blue, modifiers: [:bold]}, %Style{fg: :black, bg: :light_blue, modifiers: [:bold]}}
-    else
-      {%Style{fg: :gray}, %Style{modifiers: [:reversed]}}
-    end
+    {devices_border_style, devices_highlight_style} =
+      if state.focused == :devices do
+        {%Style{fg: :light_blue, modifiers: [:bold]},
+         %Style{fg: :black, bg: :light_blue, modifiers: [:bold]}}
+      else
+        {%Style{fg: :gray}, %Style{modifiers: [:reversed]}}
+      end
 
-    {actions_border_style, actions_highlight_style} = if state.focused == :actions do
-      {%Style{fg: :light_blue, modifiers: [:bold]}, %Style{fg: :black, bg: :light_blue, modifiers: [:bold]}}
-    else
-      {%Style{fg: :gray}, %Style{modifiers: [:reversed]}}
-    end
+    {actions_border_style, actions_highlight_style} =
+      if state.focused == :actions do
+        {%Style{fg: :light_blue, modifiers: [:bold]},
+         %Style{fg: :black, bg: :light_blue, modifiers: [:bold]}}
+      else
+        {%Style{fg: :gray}, %Style{modifiers: [:reversed]}}
+      end
 
-    table = %Table{
-      header: header,
-      rows: rows,
-      widths: [
-        {:length, 4},
-        {:percentage, 60},
-        {:length, 10}
-      ],
-      selected: state.selected,
-      highlight_symbol: ">> ",
-      highlight_style: devices_highlight_style,
-      block: %Block{
-        title: " Devices ",
-        borders: [:all],
-        border_style: devices_border_style,
-        border_type: if(state.focused == :devices, do: :thick, else: :plain)
-      }
-    }
+    # Left Panel: Devices
+    devices_widget =
+      if state.devices == [] and state.scanning? do
+        %Paragraph{
+          text: "\n Scanning...",
+          alignment: :center,
+          block: %Block{
+            title: " Devices ",
+            borders: [:all],
+            border_style: devices_border_style,
+            border_type: if(state.focused == :devices, do: :thick, else: :plain)
+          }
+        }
+      else
+        header = ["ID", "Name", "Type"]
 
+        rows =
+          Enum.map(state.devices, fn d ->
+            [d.id, d.name, d.type]
+          end)
+
+        %Table{
+          header: header,
+          rows: rows,
+          widths: [
+            {:length, 4},
+            {:percentage, 60},
+            {:length, 10}
+          ],
+          selected: state.selected,
+          highlight_symbol: ">> ",
+          highlight_style: devices_highlight_style,
+          block: %Block{
+            title: " Devices ",
+            borders: [:all],
+            border_style: devices_border_style,
+            border_type: if(state.focused == :devices, do: :thick, else: :plain)
+          }
+        }
+      end
+
+    # Right Panel: Actions
     selected_device = Enum.at(state.devices, state.selected)
-    actions = Device.actions(selected_device)
 
-    actions_list = %List{
-      items: actions,
-      selected: state.selected_action,
-      highlight_symbol: "> ",
-      highlight_style: actions_highlight_style,
-      block: %Block{
-        title: " Actions ",
-        borders: [:all],
-        border_style: actions_border_style,
-        border_type: if(state.focused == :actions, do: :thick, else: :plain)
-      }
-    }
+    actions_widget =
+      if selected_device do
+        actions = Device.actions(selected_device)
+
+        %List{
+          items: actions,
+          selected: state.selected_action,
+          highlight_symbol: "> ",
+          highlight_style: actions_highlight_style,
+          block: %Block{
+            title: " Actions ",
+            borders: [:all],
+            border_style: actions_border_style,
+            border_type: if(state.focused == :actions, do: :thick, else: :plain)
+          }
+        }
+      else
+        %Paragraph{
+          text: "\n Select a device to see actions",
+          alignment: :center,
+          block: %Block{
+            title: " Actions ",
+            borders: [:all],
+            border_style: actions_border_style,
+            border_type: if(state.focused == :actions, do: :thick, else: :plain)
+          }
+        }
+      end
 
     footer = %Paragraph{
       text: " q: Quit | ↑/↓: Navigate | ←/→: Switch Panel | enter: Run Action ",
@@ -89,8 +130,8 @@ defmodule NskCli.TUI do
     }
 
     [
-      {table, left_area},
-      {actions_list, right_area},
+      {devices_widget, left_area},
+      {actions_widget, right_area},
       {footer, footer_area}
     ]
   end
@@ -120,7 +161,7 @@ defmodule NskCli.TUI do
 
   def handle_event(%ExRatatui.Event.Key{code: "down"}, %{focused: :actions} = state) do
     selected_device = Enum.at(state.devices, state.selected)
-    actions = Device.actions(selected_device)
+    actions = if selected_device, do: Device.actions(selected_device), else: []
     new_selected = min(state.selected_action + 1, length(actions) - 1)
     {:noreply, %{state | selected_action: new_selected}}
   end
@@ -131,6 +172,39 @@ defmodule NskCli.TUI do
   end
 
   def handle_event(_event, state) do
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info(:refresh_devices, state) do
+    Task.async(fn -> Discovery.discover() end)
+    {:noreply, %{state | scanning?: true}}
+  end
+
+  @impl true
+  def handle_info({_ref, devices}, state) when is_list(devices) do
+    # Try to keep selection stable if the device is still there
+    selected_device = Enum.at(state.devices, state.selected)
+
+    new_selected =
+      if selected_device do
+        Enum.find_index(devices, fn d -> d.id == selected_device.id end) || 0
+      else
+        0
+      end
+
+    Process.send_after(self(), :refresh_devices, @refresh_interval)
+    {:noreply, %{state | devices: devices, selected: new_selected, scanning?: false}}
+  end
+
+  @impl true
+  def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
+    # Task finished
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info(_msg, state) do
     {:noreply, state}
   end
 
